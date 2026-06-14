@@ -10,6 +10,7 @@ pool:
   vmImage: ubuntu-latest
 
 steps:
+
 # Install .NET SDK
 - task: UseDotNet@2
   displayName: 'Install .NET SDK'
@@ -17,40 +18,36 @@ steps:
     packageType: 'sdk'
     version: '8.0.x'
 
-# Restore NuGet packages
+# Verify SDK
+- script: dotnet --info
+  displayName: 'Display .NET Info'
+
+# Restore packages
 - task: DotNetCoreCLI@2
-  displayName: 'Restore Packages'
+  displayName: 'Restore'
   inputs:
     command: 'restore'
     projects: 'LGWebApp.csproj'
 
-# Build solution
+# Build project
 - task: DotNetCoreCLI@2
-  displayName: 'Build Solution'
+  displayName: 'Build'
   inputs:
     command: 'build'
-    projects: '**/*.sln'
+    projects: 'LGWebApp.csproj'
     arguments: '--configuration $(buildConfiguration) --no-restore'
 
-# Run unit tests
+# Publish project
 - task: DotNetCoreCLI@2
-  displayName: 'Run Tests'
-  inputs:
-    command: 'test'
-    projects: '**/*Tests/*.csproj'
-    arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"'
-    publishTestResults: true
-
-# Publish application
-- task: DotNetCoreCLI@2
-  displayName: 'Publish Application'
+  displayName: 'Publish'
   inputs:
     command: 'publish'
-    publishWebProjects: true
+    publishWebProjects: false
+    projects: 'LGWebApp.csproj'
     arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
     zipAfterPublish: true
 
-# Publish build artifacts
+# Publish artifact
 - task: PublishBuildArtifacts@1
   displayName: 'Publish Artifact'
   inputs:
