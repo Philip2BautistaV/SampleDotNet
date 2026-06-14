@@ -22,7 +22,7 @@ steps:
   displayName: 'Restore Packages'
   inputs:
     command: 'restore'
-    projects: '**/*.sln'
+    projects: '**/*.csproj'
 
 # Build solution
 - task: DotNetCoreCLI@2
