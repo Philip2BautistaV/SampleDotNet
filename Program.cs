@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "Hi Kaiden and Khrisca.  This is Alexa at your service");
+app.MapGet("/", () => "Welcome to Accenture Cubao");
 
 app.Run();
