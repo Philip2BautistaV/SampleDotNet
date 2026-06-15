@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "Hello Accenture Philippines");
+app.MapGet("/", () => "Welcome to Accenture Cubao");
 
 app.Run();
