@@ -4,7 +4,7 @@
 # https://aka.ms/yaml
 
 trigger:
-- Develop
+- main
 
 pool:
   vmImage: windows-latest
