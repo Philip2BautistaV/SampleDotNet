@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "Welcome to Accenture Cubao");
+app.MapGet("/", () => "Testing only");
 
 app.Run();
