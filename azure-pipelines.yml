@@ -4,9 +4,17 @@
 # https://aka.ms/yaml
 
 trigger:
- branches:
-  include:
- 
+  branches:
+    include:
+      - develop
+      - release/*
+      - main
+      
+pr:
+  branches:
+    include:
+      - develop
+      - release/*
 
 pool:
   vmImage: windows-latest
