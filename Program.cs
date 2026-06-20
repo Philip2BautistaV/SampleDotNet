@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "This test is for WebApp");
+app.MapGet("/", () => "Test for today - 062026");
 
 app.Run();
