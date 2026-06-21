@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "Error Fixed");
+app.MapGet("/", () => "DataPlatform Completed");
 
 app.Run();
