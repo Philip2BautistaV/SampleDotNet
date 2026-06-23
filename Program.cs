@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "Deployment to AIML is completed");
+app.MapGet("/", () => "Test - Main");
 
 app.Run();
