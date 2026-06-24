@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "AI/ML deployment completed");
+app.MapGet("/", () => "Indespensible update in UI");
 
 app.Run();
