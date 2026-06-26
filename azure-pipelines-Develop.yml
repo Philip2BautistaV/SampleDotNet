@@ -1,62 +1,111 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
 trigger:
   branches:
     include:
-      - Develop
-      
-pr:
-  branches:
-    include:
+      - feature/*
       - Develop
 
 pool:
-  vmImage: windows-latest
+  vmImage: 'ubuntu-latest'
 
-steps:
+variables:
+  buildConfiguration: 'Release'
 
-# Install .NET 9 SDK
-- task: UseDotNet@2
-  displayName: 'Install .NET 9 SDK'
-  inputs:
-    packageType: 'sdk'
-    version: '9.0.x'
+stages:
 
-# Verify installation
-- script: |
-    dotnet --info
-  displayName: 'Display .NET Info'
+# =========================
+# 1. BUILD STAGE (CI)
+# =========================
+- stage: Build
+  displayName: 'Build & Test'
+  jobs:
+    - job: BuildJob
+      steps:
 
-# Restore packages
-- task: DotNetCoreCLI@2
-  displayName: 'Restore'
-  inputs:
-    command: 'restore'
-    projects: 'LGWebApp.csproj'
+        - checkout: self
+          persistCredentials: true   # Needed for git push later
 
-# Build
-- task: DotNetCoreCLI@2
-  displayName: 'Build'
-  inputs:
-    command: 'build'
-    projects: 'LGWebApp.csproj'
-    arguments: '--configuration $(buildConfiguration) --no-restore'
+        - task: UseDotNet@2
+          displayName: 'Install .NET SDK'
+          inputs:
+            packageType: 'sdk'
+            version: '9.0.x'
 
-# Publish
-- task: DotNetCoreCLI@2
-  displayName: 'Publish'
-  inputs:
-    command: 'publish'
-    projects: 'LGWebApp.csproj'
-    publishWebProjects: false
-    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+        - script: dotnet restore
+          displayName: 'Restore'
 
-# Publish artifact
-- task: PublishBuildArtifacts@1
-  displayName: 'Publish Build Artifact'
-  inputs:
-    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-    ArtifactName: 'drop'
+        - script: dotnet build --configuration $(buildConfiguration)
+          displayName: 'Build'
+
+        - script: dotnet test --configuration $(buildConfiguration) --no-build
+          displayName: 'Run Tests'
+
+        - script: dotnet publish -c $(buildConfiguration) -o $(Build.ArtifactStagingDirectory)
+          displayName: 'Publish'
+
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish Artifact'
+          inputs:
+            PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+            ArtifactName: 'drop'
+
+
+# =========================
+# 2. MERGE TO DEVELOP
+# =========================
+- stage: MergeToDevelop
+  displayName: 'Merge to Develop'
+  dependsOn: Build
+  condition: succeeded()
+
+  jobs:
+    - job: Merge
+      steps:
+        - checkout: self
+          persistCredentials: true
+
+        - script: |
+            git config user.email "buildagent@dev.azure.com"
+            git config user.name "Build Agent"
+
+            git fetch origin
+
+            # Checkout develop
+            git checkout Develop
+            git pull origin Develop
+
+            # Merge source branch into develop
+            git merge origin/$(Build.SourceBranchName) --no-ff -m "Auto-merge from CI pipeline"
+
+            # Push changes
+            git push origin Develop
+          displayName: 'Merge to Develop'
+
+
+# =========================
+# 3. DEPLOY TO DEVELOPMENT
+# =========================
+- stage: Deploy_Dev
+  displayName: 'Deploy to Development'
+  dependsOn: MergeToDevelop
+  condition: succeeded()
+
+  jobs:
+    - deployment: DeployDev
+      displayName: 'Deploy to Dev Environment'
+      environment: 'Development'
+
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+
+              - download: current
+                artifact: drop
+
+              - script: |
+                  echo "Deploying to Development environment..."
+                  echo "Artifact path: $(Pipeline.Workspace)/drop"
+                displayName: 'Deploy Step'
+
+              # Replace with your real deployment task:
+              # - task: AzureWebApp@1 / AzureFunctionApp@1 / etc.
