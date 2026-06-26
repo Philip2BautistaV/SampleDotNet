@@ -92,7 +92,7 @@ stages:
 - stage: Staging
   displayName: 'Deploy to Production Environment'
   dependsOn: Build
-  condition: eq(variables['Build.SourceBranch'], 'refs/heads/Develop')
+  condition: eq(toLower(variables['Build.SourceBranch']), 'refs/heads/develop')
 
   jobs:
     - deployment: Deploy_Staging
