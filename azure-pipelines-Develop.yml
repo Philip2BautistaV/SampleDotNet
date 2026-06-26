@@ -1,50 +1,111 @@
-# =========================
-# Continuous Deployment YAML
-# =========================
+trigger:
+  branches:
+    include:
+      - feature/*
+      - develop
 
-trigger: none   # No code trigger
-
-resources:
-  pipelines:
-    - pipeline: ciPipeline
-      source: 'Philip2BautistaV.SampleDotNet-ACN'   # Name of your CI pipeline (azure-pipelines.yml)
-      trigger:
-        branches:
-          include:
-            - main
+pool:
+  vmImage: 'ubuntu-latest'
 
 variables:
-  ConnectedServiceName: 'a4705bae-6684-47b6-bfa9-1c21f9f43607'   # from your screenshot
-  WebAppKind: 'webApp'
-  WebAppName: 'Staging101'
+  buildConfiguration: 'Release'
 
 stages:
 
 # =========================
-# STAGING DEPLOYMENT
+# 1. BUILD STAGE (CI)
 # =========================
-- stage: Staging
-  displayName: "Deploy to Staging"
+- stage: Build
+  displayName: 'Build & Test'
+  jobs:
+    - job: BuildJob
+      steps:
+
+        - checkout: self
+          persistCredentials: true   # Needed for git push later
+
+        - task: UseDotNet@2
+          displayName: 'Install .NET SDK'
+          inputs:
+            packageType: 'sdk'
+            version: '9.0.x'
+
+        - script: dotnet restore
+          displayName: 'Restore'
+
+        - script: dotnet build --configuration $(buildConfiguration)
+          displayName: 'Build'
+
+        - script: dotnet test --configuration $(buildConfiguration) --no-build
+          displayName: 'Run Tests'
+
+        - script: dotnet publish -c $(buildConfiguration) -o $(Build.ArtifactStagingDirectory)
+          displayName: 'Publish'
+
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish Artifact'
+          inputs:
+            PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+            ArtifactName: 'drop'
+
+
+# =========================
+# 2. MERGE TO DEVELOP
+# =========================
+- stage: MergeToDevelop
+  displayName: 'Merge to Develop'
+  dependsOn: Build
+  condition: succeeded()
 
   jobs:
-    - deployment: DeployWebApp
-      displayName: "Deploy Azure App Service"
-      environment: "Staging101"   # must exist in Azure DevOps
+    - job: Merge
+      steps:
+        - checkout: self
+          persistCredentials: true
+
+        - script: |
+            git config user.email "buildagent@dev.azure.com"
+            git config user.name "Build Agent"
+
+            git fetch origin
+
+            # Checkout develop
+            git checkout develop
+            git pull origin develop
+
+            # Merge source branch into develop
+            git merge origin/$(Build.SourceBranchName) --no-ff -m "Auto-merge from CI pipeline"
+
+            # Push changes
+            git push origin develop
+          displayName: 'Merge to develop'
+
+
+# =========================
+# 3. DEPLOY TO DEVELOPMENT
+# =========================
+- stage: Deploy_Dev
+  displayName: 'Deploy to Development'
+  dependsOn: MergeToDevelop
+  condition: succeeded()
+
+  jobs:
+    - deployment: DeployDev
+      displayName: 'Deploy to Dev Environment'
+      environment: 'Development'
 
       strategy:
         runOnce:
           deploy:
             steps:
-              # Download artifact from CI
-              - download: ciPipeline
+
+              - download: current
                 artifact: drop
 
-              # Deploy to Azure App Service
-              - task: AzureWebApp@1
-                displayName: "Deploy Web App"
-                inputs:
-                  azureSubscription: $(ConnectedServiceName)
-                  appType: webApp
-                  appName: $(WebAppName)
-                  package: $(Pipeline.Workspace)/ciPipeline/drop
-``
+              - script: |
+                  echo "Deploying to Development environment..."
+                  echo "Artifact path: $(Pipeline.Workspace)/drop"
+                displayName: 'Deploy Step'
+
+              # Replace with your real deployment task:
+              # - task: AzureWebApp@1 / AzureFunctionApp@1 / etc.
