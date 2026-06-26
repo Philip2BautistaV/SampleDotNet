@@ -10,123 +10,101 @@ trigger:
       - release/*
       - main
 
+pr:
+  branches:
+    include:
+      - Develop
+      - release/*
+
 pool:
   vmImage: windows-latest
 
-variables:
-  buildConfiguration: 'Release'
-  azureServiceConnection: '45138fee-3b39-4bda-bba3-d5461fad16ab'
-  WebAppKind: 'webApp'
-  WebAppName1: 'DBG-Training'
+steps:
 
-stages:
+# Install .NET 9 SDK
+- task: UseDotNet@2
+  displayName: 'Install .NET 9 SDK'
+  inputs:
+    packageType: 'sdk'
+    version: '9.0.x'
 
-# ====================================
-# STAGE 1: BUILD (FROM CI YAML)
-# ====================================
-- stage: Build
-  displayName: 'Build and Test'
-  jobs:
-    - job: BuildJob
-      steps:
+# Verify installation
+- script: |
+    dotnet --info
+  displayName: 'Display .NET Info'
 
-        - task: UseDotNet@2
-          displayName: 'Install .NET 9 SDK'
-          inputs:
-            packageType: 'sdk'
-            version: '9.0.x'
+# Restore packages
+- task: DotNetCoreCLI@2
+  displayName: 'Restore'
+  inputs:
+    command: 'restore'
+    projects: 'LGWebApp.csproj'
 
-        - script: dotnet --info
-          displayName: 'Display .NET Info'
+# Build
+- task: DotNetCoreCLI@2
+  displayName: 'Build'
+  inputs:
+    command: 'build'
+    projects: 'LGWebApp.csproj'
+    arguments: '--configuration $(buildConfiguration) --no-restore'
 
-        - task: DotNetCoreCLI@2
-          displayName: 'Restore'
-          inputs:
-            command: 'restore'
-            projects: 'LGWebApp.csproj'
+# Linting
+- script: dotnet format --verify-no-changes
+  displayName: 'Lint'
 
-        - task: DotNetCoreCLI@2
-          displayName: 'Build'
-          inputs:
-            command: 'build'
-            projects: 'LGWebApp.csproj'
-            arguments: '--configuration $(buildConfiguration) --no-restore'
+# Unit Tests
+- task: DotNetCoreCLI@2
+  displayName: 'Unit Tests'
+  inputs:
+    command: test
+    projects: '**/*Tests.csproj'
+    arguments: >
+      --configuration Release
+      --no-build
+      --collect:"XPlat Code Coverage"
+      --logger trx
 
-        - script: dotnet format --verify-no-changes
-          displayName: 'Lint'
+# Publish Test Results
+- task: PublishTestResults@2
+  inputs:
+    testResultsFormat: VSTest
+    testResultsFiles: '**/*.trx'
+    failTaskOnFailedTests: true
 
-        - task: DotNetCoreCLI@2
-          displayName: 'Unit Tests'
-          inputs:
-            command: test
-            projects: '**/*Tests.csproj'
-            arguments: '--configuration Release --no-build'
+# Publish Code Coverage
+- task: PublishCodeCoverageResults@2
+  inputs:
+    codeCoverageTool: Cobertura
+    summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
 
-        - task: DotNetCoreCLI@2
-          displayName: 'Integration Tests'
-          inputs:
-            command: test
-            projects: '**/*IntegrationTests.csproj'
-            arguments: '--configuration Release --no-build'
+# Integration Tests
 
-        - script: |
-            dotnet tool install --global Microsoft.CST.DevSkim.CLI
-            devskim analyze --source-code $(Build.SourcesDirectory)
-          displayName: 'Security Scan'
+- task: DotNetCoreCLI@2
+  displayName: 'Integration Tests'
+  inputs:
+    command: test
+    projects: '**/*IntegrationTests.csproj'
+    arguments: '--configuration Release --no-build'
 
-        - task: DotNetCoreCLI@2
-          displayName: 'Publish'
-          inputs:
-            command: 'publish'
-            projects: 'LGWebApp.csproj'
-            publishWebProjects: false
-            arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+# Security Scan
+- script: |
+    dotnet tool install --global Microsoft.CST.DevSkim.CLI
+    devskim analyze --source-code $(Build.SourcesDirectory)
+  displayName: 'Security Scan'
 
-        - publish: $(Build.ArtifactStagingDirectory)
-          artifact: drop
+# Publish
+- task: DotNetCoreCLI@2
+  displayName: 'Publish'
+  inputs:
+    command: 'publish'
+    projects: 'LGWebApp.csproj'
+    publishWebProjects: false
+    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
 
-
-
-# CD Pipeline - Azure App Service Deployment
-
-trigger: none   # CD should not auto-trigger on code changes
-resources:
-  pipelines:
-    - pipeline: ciPipeline
-      source: Philip2BautistaV.SampleDotNet-ACN
-      trigger:
-        branches:
-          include:
-            - Develop
-            - main
-            - release/*
-
-variables:
-  ConnectedServiceName: '45138fee-3b39-4bda-bba3-d5461fad16ab'
-  WebAppKind: 'webApp'
-  WebAppName: 'Staging101'
-
-stages:
-- stage: Deploy_Staging
-  displayName: Deploy to Staging
-  jobs:
-  - deployment: DeployWebApp
-    displayName: Deploy Azure App Service
-    environment: Staging
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: ciPipeline
-            artifact: drop
-
-          - task: AzureRmWebAppDeployment@4
-            displayName: 'Deploy Azure App Service'
-            inputs:
-              azureSubscription: '$(ConnectedServiceName)'
-              appType: '$(WebAppKind)'
-              WebAppName: '$(WebAppName)'
-              packageForLinux: '$(Pipeline.Workspace)/ciPipeline/drop/**/*.zip'
-
-
-
+# Publish artifact
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Build Artifact'
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'drop'
+    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.SourceBranch'], 'refs/heads/develop'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')))
