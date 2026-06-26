@@ -10,101 +10,134 @@ trigger:
       - release/*
       - main
 
-pr:
-  branches:
-    include:
-      - Develop
-      - release/*
-
 pool:
   vmImage: windows-latest
 
-steps:
+variables:
+  buildConfiguration: 'Release'
+  azureServiceConnection: '45138fee-3b39-4bda-bba3-d5461fad16ab'
+  webAppName: 'Staging101'
 
-# Install .NET 9 SDK
-- task: UseDotNet@2
-  displayName: 'Install .NET 9 SDK'
-  inputs:
-    packageType: 'sdk'
-    version: '9.0.x'
+stages:
 
-# Verify installation
-- script: |
-    dotnet --info
-  displayName: 'Display .NET Info'
+# ====================================
+# STAGE 1: BUILD (FROM CI YAML)
+# ====================================
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+    - job: BuildJob
+      steps:
 
-# Restore packages
-- task: DotNetCoreCLI@2
-  displayName: 'Restore'
-  inputs:
-    command: 'restore'
-    projects: 'LGWebApp.csproj'
+        - task: UseDotNet@2
+          displayName: 'Install .NET 9 SDK'
+          inputs:
+            packageType: 'sdk'
+            version: '9.0.x'
 
-# Build
-- task: DotNetCoreCLI@2
-  displayName: 'Build'
-  inputs:
-    command: 'build'
-    projects: 'LGWebApp.csproj'
-    arguments: '--configuration $(buildConfiguration) --no-restore'
+        - script: dotnet --info
+          displayName: 'Display .NET Info'
 
-# Linting
-- script: dotnet format --verify-no-changes
-  displayName: 'Lint'
+        - task: DotNetCoreCLI@2
+          displayName: 'Restore'
+          inputs:
+            command: 'restore'
+            projects: 'LGWebApp.csproj'
 
-# Unit Tests
-- task: DotNetCoreCLI@2
-  displayName: 'Unit Tests'
-  inputs:
-    command: test
-    projects: '**/*Tests.csproj'
-    arguments: >
-      --configuration Release
-      --no-build
-      --collect:"XPlat Code Coverage"
-      --logger trx
+        - task: DotNetCoreCLI@2
+          displayName: 'Build'
+          inputs:
+            command: 'build'
+            projects: 'LGWebApp.csproj'
+            arguments: '--configuration $(buildConfiguration) --no-restore'
 
-# Publish Test Results
-- task: PublishTestResults@2
-  inputs:
-    testResultsFormat: VSTest
-    testResultsFiles: '**/*.trx'
-    failTaskOnFailedTests: true
+        - script: dotnet format --verify-no-changes
+          displayName: 'Lint'
 
-# Publish Code Coverage
-- task: PublishCodeCoverageResults@2
-  inputs:
-    codeCoverageTool: Cobertura
-    summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+        - task: DotNetCoreCLI@2
+          displayName: 'Unit Tests'
+          inputs:
+            command: test
+            projects: '**/*Tests.csproj'
+            arguments: '--configuration Release --no-build'
 
-# Integration Tests
+        - task: DotNetCoreCLI@2
+          displayName: 'Integration Tests'
+          inputs:
+            command: test
+            projects: '**/*IntegrationTests.csproj'
+            arguments: '--configuration Release --no-build'
 
-- task: DotNetCoreCLI@2
-  displayName: 'Integration Tests'
-  inputs:
-    command: test
-    projects: '**/*IntegrationTests.csproj'
-    arguments: '--configuration Release --no-build'
+        - script: |
+            dotnet tool install --global Microsoft.CST.DevSkim.CLI
+            devskim analyze --source-code $(Build.SourcesDirectory)
+          displayName: 'Security Scan'
 
-# Security Scan
-- script: |
-    dotnet tool install --global Microsoft.CST.DevSkim.CLI
-    devskim analyze --source-code $(Build.SourcesDirectory)
-  displayName: 'Security Scan'
+        - task: DotNetCoreCLI@2
+          displayName: 'Publish'
+          inputs:
+            command: 'publish'
+            projects: 'LGWebApp.csproj'
+            publishWebProjects: false
+            arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
 
-# Publish
-- task: DotNetCoreCLI@2
-  displayName: 'Publish'
-  inputs:
-    command: 'publish'
-    projects: 'LGWebApp.csproj'
-    publishWebProjects: false
-    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+        - publish: $(Build.ArtifactStagingDirectory)
+          artifact: drop
 
-# Publish artifact
-- task: PublishBuildArtifacts@1
-  displayName: 'Publish Build Artifact'
-  inputs:
-    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-    ArtifactName: 'drop'
-    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.SourceBranch'], 'refs/heads/develop'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')))
+
+# ====================================
+# STAGE 2: STAGING (FROM CD YAML)
+# ====================================
+- stage: Staging
+  displayName: 'Deploy to DBG-Training'
+  dependsOn: Build
+  condition: eq(variables['Build.SourceBranch'], 'refs/heads/Develop')
+
+  jobs:
+    - deployment: Deploy_Staging
+      environment: 'DBG-Training'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: drop
+
+
+# ====================================
+# STAGE 3: ORT
+# ====================================
+- stage: ORT
+  displayName: 'Deploy to ORT-Environment'
+  dependsOn: Build
+  condition: startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+
+  jobs:
+    - deployment: Deploy_ORT
+      environment: 'ORT-Environment'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: drop
+
+
+# ====================================
+# STAGE 4: PRODUCTION
+# ====================================
+- stage: Production
+  displayName: 'Deploy to Production'
+  dependsOn: Build
+  condition: eq(variables['Build.SourceBranch'], 'refs/heads/main')
+
+  jobs:
+    - deployment: Deploy_Prod
+      environment: 'Staging101'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: drop
+
