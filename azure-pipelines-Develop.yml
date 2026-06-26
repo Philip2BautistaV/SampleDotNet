@@ -70,15 +70,15 @@ stages:
             git fetch origin
 
             # Checkout develop
-            git checkout develop
-            git pull origin develop
+            git checkout Develop
+            git pull origin Develop
 
             # Merge source branch into develop
             git merge origin/$(Build.SourceBranchName) --no-ff -m "Auto-merge from CI pipeline"
 
             # Push changes
-            git push origin develop
-          displayName: 'Merge to develop'
+            git push origin Develop
+          displayName: 'Merge to Develop'
 
 
 # =========================
