@@ -3,12 +3,9 @@ pr: none
 
 resources:
   pipelines:
-    - pipeline: ciPipeline   # alias (you can keep this)
-      source: Philip2BautistaV.SampleDotNet-ACN   # ✅ MUST match your CI pipeline name
-      trigger:
-        branches:
-          include:
-            - Develop   # ✅ must match CI trigger branch exactly
+    - pipeline: ciPipeline
+      source: Philip2BautistaV.SampleDotNet-ACN   # ✅ REPLACE with your actual CI pipeline name
+      trigger: true
 
 pool:
   vmImage: windows-latest
@@ -16,16 +13,16 @@ pool:
 stages:
 
 # ===============================
-# STAGE - DEPLOY TO DEVELOPMENT
+# DEPLOY TO DEVELOPMENT
 # ===============================
 - stage: Deploy_Dev
-  displayName: "Deploy to Development"
+  displayName: "Deploy to Development Environment"
 
   jobs:
-    - deployment: DeployToDevelopment
-      displayName: "Deploy to Development Environment"
+    - deployment: DeployToDev
+      displayName: "Deploy Azure App Service"
 
-      # ✅ This enables approval (configure in Azure DevOps UI)
+      # ✅ Enables approval (configure in ADO UI)
       environment: "Staging101"
 
       strategy:
@@ -33,17 +30,21 @@ stages:
           deploy:
             steps:
 
-              # ✅ Download artifact from CI pipeline
+              # ✅ Download artifact from CI
               - download: ciPipeline
                 artifact: drop
 
-              # ✅ Verify artifact (debug step)
+              # ✅ (Recommended) verify artifact path
               - script: |
-                  echo "Listing downloaded artifact:"
-                  dir $(Pipeline.Workspace)/ciPipeline/drop
+                  echo "Listing files:"
+                  dir $(Pipeline.Workspace)
                 displayName: "Verify Artifact"
 
-              # ✅ Deployment step (replace with real deployment)
-              - script: |
-                  echo "Deploying application to Development environment..."
-                displayName: "Deploy Application"
+              # ✅ Your requested deployment task
+              - task: AzureRmWebAppDeployment@4
+                displayName: 'Deploy Azure App Service'
+                inputs:
+                  azureSubscription: 'a4705bae-6684-47b6-bfa9-1c21f9f43607'
+                  appType: 'Web App'
+                  WebAppName: 'Staging101'
+                  packageForLinux: '$(Pipeline.Workspace)/ciPipeline/drop/s.zip'
