@@ -2,7 +2,7 @@
 trigger:
   branches:
     include:
-      - develop   # ✅ Trigger after merge
+      - Develop   # ✅ Trigger after merge
 
 pr: none
 
