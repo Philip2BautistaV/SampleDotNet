@@ -1,15 +1,14 @@
-
 trigger: none
 pr: none
 
 resources:
   pipelines:
-    - pipeline: ciPipeline   # alias
-      source: Philip2BautistaV.SampleDotNet-ACN   # ✅ CI pipeline name
+    - pipeline: ciPipeline   # alias (you can keep this)
+      source: Philip2BautistaV.SampleDotNet-ACN   # ✅ MUST match your CI pipeline name
       trigger:
         branches:
           include:
-            - Develop   # must match CI branch exactly
+            - Develop   # ✅ must match CI trigger branch exactly
 
 pool:
   vmImage: windows-latest
@@ -26,22 +25,25 @@ stages:
     - deployment: DeployToDevelopment
       displayName: "Deploy to Development Environment"
 
-      # ✅ Approval happens here (configured in ADO UI)
-      environment: "Development"
+      # ✅ This enables approval (configure in Azure DevOps UI)
+      environment: "Staging101"
 
       strategy:
         runOnce:
           deploy:
             steps:
 
+              # ✅ Download artifact from CI pipeline
               - download: ciPipeline
                 artifact: drop
 
+              # ✅ Verify artifact (debug step)
               - script: |
-                  echo "Artifact downloaded"
-                  dir $(Pipeline.Workspace)
+                  echo "Listing downloaded artifact:"
+                  dir $(Pipeline.Workspace)/ciPipeline/drop
                 displayName: "Verify Artifact"
 
+              # ✅ Deployment step (replace with real deployment)
               - script: |
-                  echo "Deploying to Development..."
-                displayName: "Deploy"
+                  echo "Deploying application to Development environment..."
+                displayName: "Deploy Application"
