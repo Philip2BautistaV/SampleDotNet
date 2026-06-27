@@ -1,13 +1,20 @@
 
-trigger:
-  branches:
-    include:
-      - Develop   # ✅ Trigger after merge
+trigger: none
 
 pr: none
 
+resources:
+  pipelines:
+    - pipeline: ciPipeline   # alias
+      source: azure-pipelines   # 👈 your CI pipeline name
+      trigger:
+        branches:
+          include:
+            - Develop   # ✅ only trigger when CI runs on develop
+
 pool:
   vmImage: windows-latest
+
 
 stages:
 
