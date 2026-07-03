@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "121212121212121212");
+app.MapGet("/", () => "AIML 2nd build");
 
 app.Run();
