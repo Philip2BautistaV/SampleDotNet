@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "TACO Tuesday");
+app.MapGet("/", () => "DBG Test Feature");
 
 app.Run();
