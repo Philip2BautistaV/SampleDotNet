@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "Release Orchestrator Test");
+app.MapGet("/", () => "Test with SME");
 
 app.Run();
